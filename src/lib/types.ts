@@ -11,7 +11,7 @@ export interface Task {
 }
 
 export interface Player {
-  name: string;
+  name:string;
   xp: number;
   level: number;
 }
@@ -50,6 +50,7 @@ export interface DailySummary {
 }
 
 export interface GameState {
+  id?: string; // Document ID in Firestore
   user: Player;
   rivals: Rival[];
   tasks: Task[];

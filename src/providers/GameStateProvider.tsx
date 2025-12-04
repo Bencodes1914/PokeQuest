@@ -1,15 +1,18 @@
 
 "use client";
 
-import React, { createContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { getInitialGameState, initialAchievements } from '@/lib/data';
 import { getLevelFromXP, calculateOfflineRivalXP, checkAchievements } from '@/lib/game-logic';
 import type { GameState, Rival, DailySummary, RivalBehavior, Achievement } from '@/lib/types';
 import { useIsClient } from '@/hooks/use-is-client';
 import { getRivalXPReasoning, getNotificationText } from '@/lib/actions';
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
+import { app } from '../firebase/config';
 
-const LOCAL_STORAGE_KEY = 'pokeQuestGameState';
+const db = getFirestore(app);
+const GAME_STATE_DOC_ID = "globalGameState";
 
 export interface GameStateContextType {
   gameState: GameState | null;
@@ -25,31 +28,60 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const isClient = useIsClient();
+  const [lastSavedState, setLastSavedState] = useState<string | null>(null);
 
-  // Load state from localStorage on initial mount
+
+  const saveGameState = useCallback(async (state: GameState | null) => {
+    if (!state || !isClient) return;
+    try {
+        const stateToSave = { ...state };
+        // Functions can't be stored in Firestore, so we remove them.
+        // They will be rehydrated on load.
+        stateToSave.achievements = state.achievements.map(({ check, ...ach }) => ach) as any;
+
+        const currentStateJson = JSON.stringify(stateToSave);
+
+        // Debounce saving to avoid rapid writes
+        if(currentStateJson === lastSavedState) return;
+
+        await setDoc(doc(db, "gameState", GAME_STATE_DOC_ID), stateToSave);
+        setLastSavedState(currentStateJson);
+    } catch (error) {
+      console.error("Failed to save game state to Firestore:", error);
+    }
+  }, [isClient, lastSavedState]);
+
+
+  // Load state from Firestore on initial mount
   useEffect(() => {
     if (isClient) {
-      try {
-        const savedStateJSON = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (savedStateJSON) {
-          const savedState = JSON.parse(savedStateJSON);
-          // Re-hydrate achievement check functions
+      const docRef = doc(db, "gameState", GAME_STATE_DOC_ID);
+      
+      const unsubscribe = onSnapshot(docRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const savedState = docSnap.data() as GameState;
           const rehydratedAchievements = initialAchievements.map(initialAch => {
-            const savedAch = savedState.achievements.find((a: Achievement) => a.id === initialAch.id);
+            const savedAch = savedState.achievements.find((a: any) => a.id === initialAch.id);
             return { ...initialAch, unlocked: savedAch ? savedAch.unlocked : initialAch.unlocked };
           });
           savedState.achievements = rehydratedAchievements;
           setGameState(savedState);
         } else {
-          setGameState(getInitialGameState());
+          console.log("No game state found in Firestore, initializing.");
+          const initialState = getInitialGameState();
+          setGameState(initialState);
+          saveGameState(initialState); // Save initial state to Firestore
         }
-      } catch (error) {
-        console.error("Failed to load game state:", error);
+        setLoading(false);
+      }, (error) => {
+        console.error("Failed to load game state from Firestore:", error);
         setGameState(getInitialGameState());
-      }
-      setLoading(false); // End loading after initial state is set
+        setLoading(false);
+      });
+
+      return () => unsubscribe(); // Cleanup snapshot listener on unmount
     }
-  }, [isClient]);
+  }, [isClient, saveGameState]);
 
   // Process state changes (leveling, achievements, offline progress, summary)
   useEffect(() => {
@@ -66,10 +98,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
 
       // --- Daily Summary Check ---
       if (todayDateString !== lastSummaryDateString) {
-        const previousDayStateJSON = localStorage.getItem(LOCAL_STORAGE_KEY);
-        // Only run summary if there's a previous state to compare to
-        if (previousDayStateJSON) {
-            const previousDayState = JSON.parse(previousDayStateJSON);
+        const docRef = doc(db, "gameState", GAME_STATE_DOC_ID);
+        const previousDayDoc = await getDoc(docRef);
+
+        if (previousDayDoc.exists()) {
+            const previousDayState = previousDayDoc.data() as GameState;
             const userXpAtStartOfDay = previousDayState.user?.xp ?? 0;
 
             const rivalsAtSummaryStart = previousDayState.rivals ?? getInitialGameState().rivals;
@@ -104,7 +137,6 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
             const outcome = userXpGained > totalRivalXP ? 'win' : userXpGained < totalRivalXP ? 'loss' : 'tie';
             
             const lastPlayedDate = new Date(lastPlayedDateString);
-             // Check if the date is valid
             const isLastPlayedValid = !isNaN(lastPlayedDate.getTime());
             const diffDays = isLastPlayedValid ? Math.round((today.getTime() - lastPlayedDate.getTime()) / (1000 * 60 * 60 * 24)) : 2;
 
@@ -129,26 +161,22 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
             
             setGameState(state);
             router.replace(`/summary?data=${encodeURIComponent(JSON.stringify(summary))}`);
-            return; // Stop further processing to allow summary page to show
+            return; 
         }
       }
 
-
-      // --- Offline Rival Progression & Daily Reset ---
+      // --- Offline Rival Progression ---
       if (lastPlayedDateString) {
         const lastPlayedDate = new Date(lastPlayedDateString);
         if (!isNaN(lastPlayedDate.getTime())) {
             const hoursElapsed = (today.getTime() - lastPlayedDate.getTime()) / (1000 * 60 * 60);
             
-            // Only run if significant time has passed to avoid rapid firing
             if (hoursElapsed > 0.1) {
-              const isNewDay = todayDateString !== lastPlayedDateString;
               const diffDays = Math.round(hoursElapsed / 24);
 
               let rivalUpdates = [...state.rivals];
               let newNotifications = [...state.notifications];
 
-              // Apply offline XP gain for rivals
               if (hoursElapsed > 0) {
                   const updatedRivals = await Promise.all(state.rivals.map(async (rival: Rival) => {
                       const xpGained = calculateOfflineRivalXP(rival, hoursElapsed);
@@ -178,9 +206,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
                   ...state, 
                   rivals: rivalUpdates, 
                   notifications: newNotifications,
-                  // Reset streak if more than a day has passed
                   streak: diffDays > 1 ? 0 : state.streak, 
-                   // Set last played to now to mark the "catch up"
                   lastPlayed: today.toISOString().split('T')[0]
               };
               hasChanges = true;
@@ -188,7 +214,6 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         }
       }
       
-      // --- Level and Achievement Calculation ---
       const userLevel = getLevelFromXP(state.user.xp);
       if (userLevel !== state.user.level) {
         state = { ...state, user: { ...state.user, level: userLevel } };
@@ -212,16 +237,21 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    processState();
-  }, [loading]); // Rerunning on loading change after initial load.
+    const timeoutId = setTimeout(() => {
+        processState();
+    }, 1000); // Delay processing to batch rapid changes
+
+    return () => clearTimeout(timeoutId);
+
+  }, [gameState, loading, isClient, router]);
 
 
-  // Save state to localStorage whenever it changes
+  // Save state to Firestore whenever it changes
   useEffect(() => {
-    if (isClient && gameState && !loading) {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(gameState));
+    if (!loading && gameState) {
+      saveGameState(gameState);
     }
-  }, [gameState, isClient, loading]);
+  }, [gameState, loading, saveGameState]);
 
   const clearSummary = () => {
     if (isClient) {
