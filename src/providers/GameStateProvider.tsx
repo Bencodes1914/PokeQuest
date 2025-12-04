@@ -3,9 +3,9 @@
 
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { getInitialGameState } from '@/lib/data';
+import { getInitialGameState, initialAchievements } from '@/lib/data';
 import { getLevelFromXP, calculateOfflineRivalXP, checkAchievements } from '@/lib/game-logic';
-import type { GameState, Rival, DailySummary, RivalBehavior } from '@/lib/types';
+import type { GameState, Rival, DailySummary, RivalBehavior, Achievement } from '@/lib/types';
 import { useIsClient } from '@/hooks/use-is-client';
 import { getRivalXPReasoning, getNotificationText } from '@/lib/actions';
 
@@ -32,7 +32,14 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       try {
         const savedStateJSON = localStorage.getItem(LOCAL_STORAGE_KEY);
         if (savedStateJSON) {
-          setGameState(JSON.parse(savedStateJSON));
+          const savedState = JSON.parse(savedStateJSON);
+          // Re-hydrate achievement check functions
+          const rehydratedAchievements = initialAchievements.map(initialAch => {
+            const savedAch = savedState.achievements.find((a: Achievement) => a.id === initialAch.id);
+            return { ...initialAch, unlocked: savedAch ? savedAch.unlocked : initialAch.unlocked };
+          });
+          savedState.achievements = rehydratedAchievements;
+          setGameState(savedState);
         } else {
           setGameState(getInitialGameState());
         }

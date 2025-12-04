@@ -60,10 +60,10 @@ export const initialTasks: Task[] = [
 
 export const initialAchievements: Achievement[] = [
     { id: 'ach-1', name: 'First Step', description: 'Complete your first task.', icon: CheckCircle, unlocked: false, check: (gs) => gs.tasks.some(t => t.completed) },
-    { id: 'ach-2', name: 'Getting Stronger', description: 'Reach Level 5.', icon: Zap, unlocked: false, check: (gs) => gs.user.level >= 5 },
+    { id: 'ach-2', name: 'Getting Stronger', description: 'Reach Level 5.', icon: Zap, unlocked: false, check: (gs) => getLevelFromXP(gs.user.xp) >= 5 },
     { id: 'ach-3', name: 'Dedicated Trainer', description: 'Achieve a 7-day streak.', icon: Calendar, unlocked: false, check: (gs) => gs.streak >= 7 },
     { id: 'ach-4', name: 'Taskmaster', description: 'Complete all daily tasks.', icon: Archive, unlocked: false, check: (gs) => gs.tasks.every(t => t.completed) },
-    { id: 'ach-5', name: 'Champion in the Making', description: 'Reach Level 10.', icon: Award, unlocked: false, check: (gs) => gs.user.level >= 10 },
+    { id: 'ach-5', name: 'Champion in the Making', description: 'Reach Level 10.', icon: Award, unlocked: false, check: (gs) => getLevelFromXP(gs.user.xp) >= 10 },
 ];
 
 
