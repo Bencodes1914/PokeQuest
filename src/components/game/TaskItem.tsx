@@ -104,7 +104,8 @@ export function TaskItem({ task }: TaskItemProps) {
     setGameState(prev => {
       if (!prev) return null;
       const today = new Date().toISOString().split('T')[0];
-      const isNewDay = prev.lastPlayed !== today;
+      const lastPlayedDate = new Date(prev.lastPlayed);
+      const isNewDay = today !== prev.lastPlayed;
       
       return {
         ...prev,
