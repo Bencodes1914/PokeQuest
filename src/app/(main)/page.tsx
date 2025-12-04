@@ -5,6 +5,7 @@ import { PlayerStatus } from "@/components/game/PlayerStatus";
 import { RivalsCarousel } from "@/components/game/RivalsCarousel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NotificationBell } from "@/components/game/NotificationBell";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function HomePage() {
   const { gameState, loading } = useGameState();
@@ -22,7 +23,10 @@ export default function HomePage() {
     <div className="container mx-auto max-w-2xl">
       <header className="flex justify-between items-center mb-6">
         <h1 className="text-4xl font-bold font-headline">PokeQuest</h1>
-        <NotificationBell />
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <NotificationBell />
+        </div>
       </header>
       <div className="space-y-8">
         <PlayerStatus player={gameState.user} streak={gameState.streak} />
