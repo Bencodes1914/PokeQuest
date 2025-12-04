@@ -29,8 +29,13 @@ const formSchema = z.object({
   difficulty: z.enum(["Easy", "Medium", "Hard"]),
   isTimeLocked: z.boolean(),
   duration: z.coerce.number().int().min(0).optional(),
-}).refine(data => !data.isTimeLocked || (data.duration && data.duration > 0), {
-    message: "Duration is required for time-locked tasks.",
+}).refine(data => {
+    if (data.isTimeLocked) {
+        return data.duration && data.duration > 0;
+    }
+    return true;
+}, {
+    message: "Duration must be greater than 0 for time-locked tasks.",
     path: ["duration"],
 });
 
