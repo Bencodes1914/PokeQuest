@@ -7,8 +7,7 @@ import { getInitialGameState } from '@/lib/data';
 import { getLevelFromXP, calculateOfflineRivalXP, checkAchievements } from '@/lib/game-logic';
 import type { GameState, Rival, DailySummary, RivalBehavior } from '@/lib/types';
 import { useIsClient } from '@/hooks/use-is-client';
-import { rivalXPReasoning } from '@/ai/flows/rival-xp-reasoning';
-import { generateNotificationText } from '@/ai/flows/notification-text-generation';
+import { getRivalXPReasoning, getNotificationText } from '@/lib/actions';
 
 const LOCAL_STORAGE_KEY = 'pokeQuestGameState';
 
@@ -73,11 +72,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
             rivalsXpGainedData
                 .filter(r => r.xpGained > 0)
                 .map(async r => {
-                    const reasonResult = await rivalXPReasoning({
-                        rivalName: r.rivalId,
-                        rivalBehavior: r.rivalBehavior,
-                        xpGained: r.xpGained,
-                    });
+                    const reasonResult = await getRivalXPReasoning(
+                        r.rivalId,
+                        r.rivalBehavior,
+                        r.xpGained,
+                    );
                     return {
                         rivalId: r.rivalId,
                         xpGained: r.xpGained,
@@ -119,7 +118,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         const rivalUpdates = await Promise.all(state.rivals.map(async (rival: Rival) => {
           const xpGained = calculateOfflineRivalXP(rival, hoursElapsed);
           if (xpGained > 0) {
-            const reason = await rivalXPReasoning({ rivalName: rival.name, rivalBehavior: rival.behavior, xpGained });
+            const reason = await getRivalXPReasoning( rival.name, rival.behavior, xpGained );
             return { ...rival, xp: rival.xp + xpGained, reason: reason.reason };
           }
           return { ...rival, reason: "" };
@@ -131,12 +130,12 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
              const oldLevel = getLevelFromXP(oldRival.xp);
              const newLevel = getLevelFromXP(update.xp);
              if (newLevel > oldLevel) {
-                 const notif = await generateNotificationText({
-                     streak: state.streak,
-                     rivalName: update.name,
-                     rivalXp: update.xp,
-                     userXp: state.user.xp
-                 });
+                 const notif = await getNotificationText(
+                     state.streak,
+                     update.name,
+                     update.xp,
+                     state.user.xp
+                 );
                  newNotifications.push({ id: `rival-levelup-${update.id}-${Date.now()}`, message: `${update.name} leveled up! ${notif.notificationText}`, timestamp: Date.now(), read: false });
              }
         }
