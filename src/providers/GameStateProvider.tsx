@@ -61,7 +61,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       const todayDateString = today.toISOString().split('T')[0];
       const lastPlayedDate = new Date(state.lastPlayed);
 
-      const isNewDay = today.toDateString() !== lastPlayedDate.toDateString();
+      const isNewDay = !lastPlayedDate || today.toDateString() !== lastPlayedDate.toDateString();
 
       // --- Daily Summary Check ---
       if (today.toDateString() !== new Date(state.lastSummaryDate).toDateString()) {
@@ -120,39 +120,41 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
 
 
       // --- Offline Rival Progression ---
-      const hoursElapsed = (today.getTime() - lastPlayedDate.getTime()) / (1000 * 60 * 60);
-      if (hoursElapsed > 1) {
-        const rivalUpdates = await Promise.all(state.rivals.map(async (rival: Rival) => {
-          const xpGained = calculateOfflineRivalXP(rival, hoursElapsed);
-          if (xpGained > 0) {
-            const reason = await getRivalXPReasoning( rival.name, rival.behavior, xpGained );
-            return { ...rival, xp: rival.xp + xpGained, reason: reason.reason };
+      if (lastPlayedDate) {
+        const hoursElapsed = (today.getTime() - lastPlayedDate.getTime()) / (1000 * 60 * 60);
+        if (hoursElapsed > 1) {
+          const rivalUpdates = await Promise.all(state.rivals.map(async (rival: Rival) => {
+            const xpGained = calculateOfflineRivalXP(rival, hoursElapsed);
+            if (xpGained > 0) {
+              const reason = await getRivalXPReasoning( rival.name, rival.behavior, xpGained );
+              return { ...rival, xp: rival.xp + xpGained, reason: reason.reason };
+            }
+            return { ...rival, reason: "" };
+          }));
+  
+          const newNotifications = [];
+          for (const update of rivalUpdates) {
+               const oldRival = state.rivals.find(r => r.id === update.id)!;
+               const oldLevel = getLevelFromXP(oldRival.xp);
+               const newLevel = getLevelFromXP(update.xp);
+               if (newLevel > oldLevel) {
+                   const notif = await getNotificationText(
+                       state.streak,
+                       update.name,
+                       update.xp,
+                       state.user.xp
+                   );
+                   newNotifications.push({ id: `rival-levelup-${update.id}-${Date.now()}`, message: `${update.name} leveled up! ${notif.notificationText}`, timestamp: Date.now(), read: false });
+               }
           }
-          return { ...rival, reason: "" };
-        }));
-
-        const newNotifications = [];
-        for (const update of rivalUpdates) {
-             const oldRival = state.rivals.find(r => r.id === update.id)!;
-             const oldLevel = getLevelFromXP(oldRival.xp);
-             const newLevel = getLevelFromXP(update.xp);
-             if (newLevel > oldLevel) {
-                 const notif = await getNotificationText(
-                     state.streak,
-                     update.name,
-                     update.xp,
-                     state.user.xp
-                 );
-                 newNotifications.push({ id: `rival-levelup-${update.id}-${Date.now()}`, message: `${update.name} leveled up! ${notif.notificationText}`, timestamp: Date.now(), read: false });
-             }
+  
+          state = { ...state, rivals: rivalUpdates.map(({reason, ...rest}) => rest), notifications: [...state.notifications, ...newNotifications] };
+          hasChanges = true;
         }
-
-        state = { ...state, rivals: rivalUpdates.map(({reason, ...rest}) => rest), notifications: [...state.notifications, ...newNotifications] };
-        hasChanges = true;
       }
       
       // --- Daily Streak Reset ---
-       if (isNewDay) {
+       if (isNewDay && lastPlayedDate) {
         const diffDays = Math.round((today.getTime() - lastPlayedDate.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays > 1) {
           state = { ...state, streak: 0 };
