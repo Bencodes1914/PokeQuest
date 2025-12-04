@@ -1,3 +1,28 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "jessie",
+      "description": "A portrait of Jessie from Team Rocket.",
+      "imageUrl": "https://images.unsplash.com/photo-1572544311821-e2f6c2ef757b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHx3b21hbiUyMHZpbGxhaW58ZW58MHx8fHwxNzY0ODUxNTI4fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "woman villain"
+    },
+    {
+      "id": "james",
+      "description": "A portrait of James from Team Rocket.",
+      "imageUrl": "https://images.unsplash.com/photo-1693020388342-ba0987dc7f4b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxtYW4lMjB2aWxsYWlufGVufDB8fHx8MTc2NDg1MTUyN3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "man villain"
+    },
+    {
+      "id": "meowth",
+      "description": "A portrait of Meowth from Team Rocket.",
+      "imageUrl": "https://images.unsplash.com/photo-1613328790885-5f6f1663fdbc?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxjYXQlMjBtb25zdGVyfGVufDB8fHx8MTc2NDg1MTUyN3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "cat monster"
+    },
+    {
+      "id": "giovanni",
+      "description": "A portrait of Giovanni, the leader of Team Rocket.",
+      "imageUrl": "https://images.unsplash.com/photo-1764264828478-edacad3ad5ff?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8bWFmaWElMjBib3NzfGVufDB8fHx8MTc2NDg1MTUyN3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "mafia boss"
+    }
+  ]
 }
