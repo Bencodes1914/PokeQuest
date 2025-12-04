@@ -127,7 +127,8 @@ export function TaskItem({ task }: TaskItemProps) {
   };
 
   const xp = getTaskXP(task.difficulty);
-  const totalXp = xp * getStreakMultiplier(gameState?.streak || 0);
+  const streak = gameState?.streak ?? 0;
+  const totalXp = xp * getStreakMultiplier(streak);
 
   const renderButton = () => {
     if (task.completed) {
@@ -157,7 +158,7 @@ export function TaskItem({ task }: TaskItemProps) {
             </Badge>
             <div className="flex items-center gap-1 text-primary font-bold">
                 <Zap className="w-4 h-4" />
-                <span>{xp} (x{getStreakMultiplier(gameState?.streak || 0).toFixed(2)} = {totalXp.toFixed(0)})</span>
+                <span>{xp} (x{getStreakMultiplier(streak).toFixed(2)} = {totalXp.toFixed(0)})</span>
             </div>
             {task.isTimeLocked && (
                 <div className="flex items-center gap-1 text-muted-foreground">
