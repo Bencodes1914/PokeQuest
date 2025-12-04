@@ -35,7 +35,7 @@ const formSchema = z.object({
     }
     return true;
 }, {
-    message: "Duration must be greater than 0 for time-locked tasks.",
+    message: "Duration must be be a positive number for time-locked tasks.",
     path: ["duration"],
 });
 
@@ -144,9 +144,9 @@ export function CreateTaskForm({ onTaskCreated }: CreateTaskFormProps) {
             name="duration"
             render={({ field }) => (
                 <FormItem>
-                <FormLabel>Duration (in seconds)</Form.Label>
+                <FormLabel>Duration (in seconds)</FormLabel>
                 <FormControl>
-                    <Input type="number" {...field} />
+                    <Input type="number" {...field} value={field.value ?? ''} />
                 </FormControl>
                 <FormMessage />
                 </FormItem>
