@@ -1,3 +1,4 @@
+
 import type { Difficulty, GameState, Rival, RivalBehavior } from './types';
 
 // --- Leveling System ---
@@ -41,36 +42,18 @@ export const getStreakMultiplier = (streak: number): number => {
 };
 
 // --- Rival Offline Progression ---
-// Returns a random task difficulty for a rival based on their behavior
-const getSimulatedRivalTaskDifficulty = (behavior: RivalBehavior): Difficulty => {
-  const rand = Math.random();
-  switch (behavior) {
-    case 'Lazy':
-      return 'Easy'; // Always does easy tasks
-    case 'Focused':
-      if (rand < 0.6) return 'Medium'; // 60% Medium, 40% Easy
-      return 'Easy';
-    case 'Hardcore':
-      if (rand < 0.5) return 'Hard'; // 50% Hard, 50% Medium
-      return 'Medium';
-    case 'Chaotic':
-      if (rand < 0.33) return 'Easy';
-      if (rand < 0.66) return 'Medium';
-      return 'Hard';
-    default:
-      return 'Easy';
-  }
-}
-
-// Simulates rival XP gain for days passed. Each day, the rival has a chance to complete one task.
+// Simulates a simple daily XP gain for rivals based on days passed.
 export const calculateOfflineRivalXP = (rival: Rival, daysElapsed: number): number => {
+    // Each rival gets a small, fixed amount of XP per day to represent passive training.
+    const dailyXPGain = { 'Lazy': 5, 'Focused': 15, 'Hardcore': 25, 'Chaotic': 10 }[rival.behavior];
+    
+    // They only gain XP if they are "active" on a given day.
+    const activityChance = { 'Lazy': 0.3, 'Focused': 0.7, 'Hardcore': 0.9, 'Chaotic': 0.9 }[rival.behavior];
+    
     let totalXpGained = 0;
     for (let i = 0; i < daysElapsed; i++) {
-        const activityChance = { 'Lazy': 0.3, 'Focused': 0.7, 'Hardcore': 0.9, 'Chaotic': 0.9 }[rival.behavior];
-        
         if (Math.random() < activityChance) {
-            const taskDifficulty = getSimulatedRivalTaskDifficulty(rival.behavior);
-            totalXpGained += getTaskXP(taskDifficulty);
+            totalXpGained += dailyXPGain;
         }
     }
     return totalXpGained;
