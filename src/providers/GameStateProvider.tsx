@@ -5,9 +5,8 @@ import React, { createContext, useState, useEffect, ReactNode, useCallback } fro
 import { useRouter } from 'next/navigation';
 import { getInitialGameState, initialAchievements } from '@/lib/data';
 import { getLevelFromXP, calculateOfflineRivalXP, checkAchievements } from '@/lib/game-logic';
-import type { GameState, Rival, DailySummary, RivalBehavior } from '@/lib/types';
+import type { GameState, Rival, DailySummary } from '@/lib/types';
 import { useIsClient } from '@/hooks/use-is-client';
-import { getRivalXPReasoning, getNotificationText } from '@/lib/actions';
 
 const LOCAL_STORAGE_KEY = 'pokeQuestGameState';
 
@@ -78,27 +77,19 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
             const startRival = rivalsAtSummaryStart.find((r: Rival) => r.id === rival.id);
             return {
                 rivalId: rival.name,
-                rivalBehavior: rival.behavior as RivalBehavior,
                 xpGained: rival.xp - (startRival?.xp ?? 0)
             };
         });
         
-        const rivalsWithReasons = await Promise.all(
-            rivalsXpGainedData
+        const rivalsWithReasons = rivalsXpGainedData
                 .filter(r => r.xpGained > 0)
-                .map(async r => {
-                    const reasonResult = await getRivalXPReasoning(
-                        r.rivalId,
-                        r.rivalBehavior,
-                        r.xpGained,
-                    );
+                .map(r => {
                     return {
                         rivalId: r.rivalId,
                         xpGained: r.xpGained,
-                        reason: reasonResult.reason,
+                        reason: `Your rival was busy!`, // Placeholder reason
                     };
-                })
-        );
+                });
         
         const userXpGained = state.user.xp - userXpAtStartOfDay;
         const totalRivalXP = rivalsXpGainedData.reduce((acc, r) => acc + r.xpGained, 0);
@@ -145,28 +136,29 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
               let newNotifications = [...state.notifications];
 
               if (hoursElapsed > 0) {
-                  const updatedRivals = await Promise.all(state.rivals.map(async (rival: Rival) => {
+                  const updatedRivals = state.rivals.map((rival: Rival) => {
                       const xpGained = calculateOfflineRivalXP(rival, hoursElapsed);
                       if (xpGained > 0) {
-                          const reason = await getRivalXPReasoning(rival.name, rival.behavior, xpGained);
-                          return { ...rival, xp: rival.xp + xpGained, reason: reason.reason };
+                          return { ...rival, xp: rival.xp + xpGained };
                       }
-                      return { ...rival, reason: "" };
-                  }));
+                      return rival;
+                  });
 
-                  for (const update of updatedRivals) {
-                      if (!update.reason) continue;
-                      const oldRival = state.rivals.find(r => r.id === update.id)!;
-                      const oldLevel = getLevelFromXP(oldRival.xp);
-                      const newLevel = getLevelFromXP(update.xp);
-                      if (newLevel > oldLevel) {
-                          const notif = await getNotificationText(state.streak, update.name, update.xp, state.user.xp);
-                          newNotifications.push({ id: `rival-levelup-${update.id}-${Date.now()}`, message: `${update.name} leveled up! ${notif.notificationText}`, timestamp: Date.now(), read: false });
-                      } else {
-                          newNotifications.push({ id: `rival-xp-${update.id}-${Date.now()}`, message: `${update.name} gained XP: "${update.reason}"`, timestamp: Date.now(), read: false });
+                  for (const updatedRival of updatedRivals) {
+                      const oldRival = state.rivals.find(r => r.id === updatedRival.id)!;
+                      const xpGained = updatedRival.xp - oldRival.xp;
+
+                      if (xpGained > 0) {
+                        const oldLevel = getLevelFromXP(oldRival.xp);
+                        const newLevel = getLevelFromXP(updatedRival.xp);
+                        if (newLevel > oldLevel) {
+                            newNotifications.push({ id: `rival-levelup-${updatedRival.id}-${Date.now()}`, message: `${updatedRival.name} leveled up while you were away!`, timestamp: Date.now(), read: false });
+                        } else {
+                            newNotifications.push({ id: `rival-xp-${updatedRival.id}-${Date.now()}`, message: `${updatedRival.name} gained ${xpGained.toFixed(0)} XP.`, timestamp: Date.now(), read: false });
+                        }
                       }
                   }
-                  rivalUpdates = updatedRivals.map(({ reason, ...rest }) => rest);
+                  rivalUpdates = updatedRivals;
               }
 
               state = { 
