@@ -60,6 +60,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       let state = { ...gameState };
       let hasChanges = false;
       const today = new Date();
+      today.setHours(0, 0, 0, 0); // Normalize to start of day
+      
       const todayDateString = today.toISOString().split('T')[0];
       
       const lastPlayedDateString = state.lastPlayed;
@@ -96,6 +98,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         const outcome = userXpGained > totalRivalXP ? 'win' : userXpGained < totalRivalXP ? 'loss' : 'tie';
         
         const lastPlayedDate = new Date(lastPlayedDateString);
+        lastPlayedDate.setHours(0,0,0,0);
         const isLastPlayedValid = !isNaN(lastPlayedDate.getTime());
         const diffDays = isLastPlayedValid ? Math.round((today.getTime() - lastPlayedDate.getTime()) / (1000 * 60 * 60 * 24)) : 2;
 
@@ -126,46 +129,44 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       // --- Offline Rival Progression ---
       if (lastPlayedDateString) {
         const lastPlayedDate = new Date(lastPlayedDateString);
-        if (!isNaN(lastPlayedDate.getTime())) {
-            const hoursElapsed = (today.getTime() - lastPlayedDate.getTime()) / (1000 * 60 * 60);
-            
-            if (hoursElapsed > 0.1) {
-              const diffDays = Math.round(hoursElapsed / 24);
+        lastPlayedDate.setHours(0, 0, 0, 0);
 
+        if (!isNaN(lastPlayedDate.getTime())) {
+            const daysElapsed = Math.round((today.getTime() - lastPlayedDate.getTime()) / (1000 * 60 * 60 * 24));
+            
+            if (daysElapsed > 0) {
               let rivalUpdates = [...state.rivals];
               let newNotifications = [...state.notifications];
 
-              if (hoursElapsed > 0) {
-                  const updatedRivals = state.rivals.map((rival: Rival) => {
-                      const xpGained = calculateOfflineRivalXP(rival, hoursElapsed);
-                      if (xpGained > 0) {
-                          return { ...rival, xp: rival.xp + xpGained };
-                      }
-                      return rival;
-                  });
-
-                  for (const updatedRival of updatedRivals) {
-                      const oldRival = state.rivals.find(r => r.id === updatedRival.id)!;
-                      const xpGained = updatedRival.xp - oldRival.xp;
-
-                      if (xpGained > 0) {
-                        const oldLevel = getLevelFromXP(oldRival.xp);
-                        const newLevel = getLevelFromXP(updatedRival.xp);
-                        if (newLevel > oldLevel) {
-                            newNotifications.push({ id: `rival-levelup-${updatedRival.id}-${Date.now()}`, message: `${updatedRival.name} leveled up while you were away!`, timestamp: Date.now(), read: false });
-                        } else {
-                            newNotifications.push({ id: `rival-xp-${updatedRival.id}-${Date.now()}`, message: `${updatedRival.name} gained ${xpGained.toFixed(0)} XP.`, timestamp: Date.now(), read: false });
-                        }
-                      }
+              const updatedRivals = state.rivals.map((rival: Rival) => {
+                  const xpGained = calculateOfflineRivalXP(rival, daysElapsed);
+                  if (xpGained > 0) {
+                      return { ...rival, xp: rival.xp + xpGained };
                   }
-                  rivalUpdates = updatedRivals;
+                  return rival;
+              });
+
+              for (const updatedRival of updatedRivals) {
+                  const oldRival = state.rivals.find(r => r.id === updatedRival.id)!;
+                  const xpGained = updatedRival.xp - oldRival.xp;
+
+                  if (xpGained > 0) {
+                    const oldLevel = getLevelFromXP(oldRival.xp);
+                    const newLevel = getLevelFromXP(updatedRival.xp);
+                    if (newLevel > oldLevel) {
+                        newNotifications.push({ id: `rival-levelup-${updatedRival.id}-${Date.now()}`, message: `${updatedRival.name} leveled up while you were away!`, timestamp: Date.now(), read: false });
+                    } else {
+                        newNotifications.push({ id: `rival-xp-${updatedRival.id}-${Date.now()}`, message: `${updatedRival.name} gained ${xpGained.toFixed(0)} XP.`, timestamp: Date.now(), read: false });
+                    }
+                  }
               }
+              rivalUpdates = updatedRivals;
 
               state = { 
                   ...state, 
                   rivals: rivalUpdates, 
                   notifications: newNotifications,
-                  streak: diffDays > 1 ? 0 : state.streak, 
+                  streak: daysElapsed > 1 ? 0 : state.streak, 
                   lastPlayed: today.toISOString().split('T')[0]
               };
               hasChanges = true;

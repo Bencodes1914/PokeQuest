@@ -41,26 +41,41 @@ export const getStreakMultiplier = (streak: number): number => {
 };
 
 // --- Rival Offline Progression ---
-export const getRivalPassiveXPGain = (behavior: RivalBehavior): number => {
-  // XP per hour
+// Returns a random task difficulty for a rival based on their behavior
+const getSimulatedRivalTaskDifficulty = (behavior: RivalBehavior): Difficulty => {
+  const rand = Math.random();
   switch (behavior) {
     case 'Lazy':
-      return 10;
+      return 'Easy'; // Always does easy tasks
     case 'Focused':
-      return 25;
+      if (rand < 0.6) return 'Medium'; // 60% Medium, 40% Easy
+      return 'Easy';
     case 'Hardcore':
-      return 50;
+      if (rand < 0.5) return 'Hard'; // 50% Hard, 50% Medium
+      return 'Medium';
     case 'Chaotic':
-      return Math.floor(Math.random() * 60); // 0-59 XP per hour
+      if (rand < 0.33) return 'Easy';
+      if (rand < 0.66) return 'Medium';
+      return 'Hard';
     default:
-      return 0;
+      return 'Easy';
   }
+}
+
+// Simulates rival XP gain for days passed. Each day, the rival has a chance to complete one task.
+export const calculateOfflineRivalXP = (rival: Rival, daysElapsed: number): number => {
+    let totalXpGained = 0;
+    for (let i = 0; i < daysElapsed; i++) {
+        const activityChance = { 'Lazy': 0.3, 'Focused': 0.7, 'Hardcore': 0.9, 'Chaotic': 0.9 }[rival.behavior];
+        
+        if (Math.random() < activityChance) {
+            const taskDifficulty = getSimulatedRivalTaskDifficulty(rival.behavior);
+            totalXpGained += getTaskXP(taskDifficulty);
+        }
+    }
+    return totalXpGained;
 };
 
-export const calculateOfflineRivalXP = (rival: Rival, hoursElapsed: number): number => {
-  const baseGain = getRivalPassiveXPGain(rival.behavior);
-  return Math.floor(baseGain * hoursElapsed);
-};
 
 // --- Achievement Checks ---
 export const checkAchievements = (gameState: GameState): GameState => {
