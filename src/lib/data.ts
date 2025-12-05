@@ -1,3 +1,4 @@
+
 import { getLevelFromXP } from './game-logic';
 import type { GameState, Task, Rival, Achievement } from './types';
 import { PlaceHolderImages } from './placeholder-images';
