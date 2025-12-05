@@ -3,7 +3,7 @@
 
 import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { getInitialGameState, initialAchievements } from '@/lib/data';
+import { getInitialGameState, initialAchievements, initialTasks } from '@/lib/data';
 import { getLevelFromXP, calculateOfflineRivalXP, checkAchievements } from '@/lib/game-logic';
 import type { GameState, Rival, DailySummary } from '@/lib/types';
 import { useIsClient } from '@/hooks/use-is-client';
@@ -36,6 +36,12 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
             return { ...initialAch, unlocked: savedAch ? savedAch.unlocked : initialAch.unlocked };
         });
         parsedState.achievements = rehydratedAchievements;
+        
+        // Ensure tasks are not empty if loaded state has none
+        if (!parsedState.tasks || parsedState.tasks.length === 0) {
+          parsedState.tasks = initialTasks;
+        }
+
         return parsedState;
       }
     } catch (error) {
@@ -70,28 +76,21 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       // --- Daily Summary Check ---
       if (todayDateString !== lastSummaryDateString) {
         const previousDayStateJSON = localStorage.getItem(`${LOCAL_STORAGE_KEY}_${lastSummaryDateString}`);
-        const previousDayState = previousDayStateJSON ? JSON.parse(previousDayStateJSON) : getInitialGameState();
+        
+        // If there's no specific state for the previous day, use the last saved general state.
+        const previousDayState = previousDayStateJSON ? JSON.parse(previousDayStateJSON) : getSavedState();
         
         const userXpAtStartOfDay = previousDayState.user?.xp ?? 0;
-
         const rivalsAtSummaryStart = previousDayState.rivals ?? getInitialGameState().rivals;
+
         const rivalsXpGainedData = state.rivals.map(rival => {
             const startRival = rivalsAtSummaryStart.find((r: Rival) => r.id === rival.id);
             return {
                 rivalId: rival.name,
-                xpGained: rival.xp - (startRival?.xp ?? 0)
+                xpGained: rival.xp - (startRival?.xp ?? 0),
+                reason: "Your rival was busy!" // Placeholder
             };
-        });
-        
-        const rivalsWithReasons = rivalsXpGainedData
-                .filter(r => r.xpGained > 0)
-                .map(r => {
-                    return {
-                        rivalId: r.rivalId,
-                        xpGained: r.xpGained,
-                        reason: `Your rival was busy!`, // Placeholder reason
-                    };
-                });
+        }).filter(r => r.xpGained > 0);
         
         const userXpGained = state.user.xp - userXpAtStartOfDay;
         const totalRivalXP = rivalsXpGainedData.reduce((acc, r) => acc + r.xpGained, 0);
@@ -100,17 +99,17 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         const lastPlayedDate = new Date(lastPlayedDateString);
         lastPlayedDate.setHours(0,0,0,0);
         const isLastPlayedValid = !isNaN(lastPlayedDate.getTime());
-        const diffDays = isLastPlayedValid ? Math.round((today.getTime() - lastPlayedDate.getTime()) / (1000 * 60 * 60 * 24)) : 2;
+        const diffDaysSinceLastPlay = isLastPlayedValid ? Math.round((today.getTime() - lastPlayedDate.getTime()) / (1000 * 60 * 60 * 24)) : 2;
 
         const summary: DailySummary = {
           date: lastSummaryDateString,
           userXpGained: userXpGained,
-          rivalsXpGained: rivalsWithReasons,
+          rivalsXpGained: rivalsXpGainedData,
           outcome: outcome,
-          streak: diffDays > 1 ? 0 : state.streak,
+          streak: diffDaysSinceLastPlay > 1 ? 0 : state.streak,
         };
-
-        const newStreak = diffDays > 1 ? 0 : state.streak;
+        
+        const newStreak = diffDaysSinceLastPlay > 1 ? 0 : state.streak;
 
         state = {
             ...getInitialGameState(),
@@ -118,7 +117,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
             streak: newStreak, 
             lastSummaryDate: todayDateString,
             lastPlayed: todayDateString,
-            user: { ...state.user, xp: state.user.xp }, // Persist user XP for a day
+            user: { ...state.user, xp: state.user.xp }, // Persist user XP
+            rivals: state.rivals, // Persist rival XP
         };
         
         setGameState(state);
@@ -203,7 +203,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
 
     return () => clearTimeout(timeoutId);
 
-  }, [gameState, loading, isClient, router]);
+  }, [gameState, loading, isClient, router, getSavedState]);
 
 
   // Save state to localStorage whenever it changes
@@ -214,6 +214,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       stateToSave.achievements = gameState.achievements.map(({ check, ...ach }) => ach);
 
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(stateToSave));
+      // Also save a snapshot for the current summary date to be used for the next day's summary
       localStorage.setItem(`${LOCAL_STORAGE_KEY}_${gameState.lastSummaryDate}`, JSON.stringify(stateToSave));
     }
   }, [gameState, loading, isClient]);
@@ -228,6 +229,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
                 achievements: prev.achievements,
                 streak: prev.streak,
                 user: { ...prev.user }, // Keep user XP and level
+                rivals: prev.rivals, // Keep rival XP and levels
                 lastPlayed: today,
                 lastSummaryDate: today
             };
