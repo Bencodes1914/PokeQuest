@@ -132,7 +132,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         lastPlayedDate.setHours(0, 0, 0, 0);
 
         if (!isNaN(lastPlayedDate.getTime())) {
-            const daysElapsed = Math.round((today.getTime() - lastPlayedDate.getTime()) / (1000 * 60 * 60 * 24));
+            const daysElapsed = Math.floor((today.getTime() - lastPlayedDate.getTime()) / (1000 * 60 * 60 * 24));
             
             if (daysElapsed > 0) {
               let rivalUpdates = [...state.rivals];
