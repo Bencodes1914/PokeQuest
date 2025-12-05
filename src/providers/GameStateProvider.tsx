@@ -5,14 +5,11 @@ import React, { createContext, useState, useEffect, ReactNode, useCallback } fro
 import { useRouter } from 'next/navigation';
 import { getInitialGameState, initialAchievements } from '@/lib/data';
 import { getLevelFromXP, calculateOfflineRivalXP, checkAchievements } from '@/lib/game-logic';
-import type { GameState, Rival, DailySummary, RivalBehavior, Achievement } from '@/lib/types';
+import type { GameState, Rival, DailySummary, RivalBehavior } from '@/lib/types';
 import { useIsClient } from '@/hooks/use-is-client';
 import { getRivalXPReasoning, getNotificationText } from '@/lib/actions';
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
-import { app } from '../firebase/config';
 
-const db = getFirestore(app);
-const GAME_STATE_DOC_ID = "globalGameState";
+const LOCAL_STORAGE_KEY = 'pokeQuestGameState';
 
 export interface GameStateContextType {
   gameState: GameState | null;
@@ -28,60 +25,33 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const isClient = useIsClient();
-  const [lastSavedState, setLastSavedState] = useState<string | null>(null);
 
-
-  const saveGameState = useCallback(async (state: GameState | null) => {
-    if (!state || !isClient) return;
+  const getSavedState = useCallback(() => {
     try {
-        const stateToSave = { ...state };
-        // Functions can't be stored in Firestore, so we remove them.
-        // They will be rehydrated on load.
-        stateToSave.achievements = state.achievements.map(({ check, ...ach }) => ach) as any;
-
-        const currentStateJson = JSON.stringify(stateToSave);
-
-        // Debounce saving to avoid rapid writes
-        if(currentStateJson === lastSavedState) return;
-
-        await setDoc(doc(db, "gameState", GAME_STATE_DOC_ID), stateToSave);
-        setLastSavedState(currentStateJson);
+      const savedState = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (savedState) {
+        const parsedState = JSON.parse(savedState);
+        // Re-hydrate achievement functions
+        const rehydratedAchievements = initialAchievements.map(initialAch => {
+            const savedAch = parsedState.achievements.find((a: any) => a.id === initialAch.id);
+            return { ...initialAch, unlocked: savedAch ? savedAch.unlocked : initialAch.unlocked };
+        });
+        parsedState.achievements = rehydratedAchievements;
+        return parsedState;
+      }
     } catch (error) {
-      console.error("Failed to save game state to Firestore:", error);
+      console.error("Failed to load game state from localStorage:", error);
     }
-  }, [isClient, lastSavedState]);
+    return getInitialGameState();
+  }, []);
 
-
-  // Load state from Firestore on initial mount
+  // Load state from localStorage on initial mount
   useEffect(() => {
     if (isClient) {
-      const docRef = doc(db, "gameState", GAME_STATE_DOC_ID);
-      
-      const unsubscribe = onSnapshot(docRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const savedState = docSnap.data() as GameState;
-          const rehydratedAchievements = initialAchievements.map(initialAch => {
-            const savedAch = savedState.achievements.find((a: any) => a.id === initialAch.id);
-            return { ...initialAch, unlocked: savedAch ? savedAch.unlocked : initialAch.unlocked };
-          });
-          savedState.achievements = rehydratedAchievements;
-          setGameState(savedState);
-        } else {
-          console.log("No game state found in Firestore, initializing.");
-          const initialState = getInitialGameState();
-          setGameState(initialState);
-          saveGameState(initialState); // Save initial state to Firestore
-        }
-        setLoading(false);
-      }, (error) => {
-        console.error("Failed to load game state from Firestore:", error);
-        setGameState(getInitialGameState());
-        setLoading(false);
-      });
-
-      return () => unsubscribe(); // Cleanup snapshot listener on unmount
+      setGameState(getSavedState());
+      setLoading(false);
     }
-  }, [isClient, saveGameState]);
+  }, [isClient, getSavedState]);
 
   // Process state changes (leveling, achievements, offline progress, summary)
   useEffect(() => {
@@ -98,71 +68,68 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
 
       // --- Daily Summary Check ---
       if (todayDateString !== lastSummaryDateString) {
-        const docRef = doc(db, "gameState", GAME_STATE_DOC_ID);
-        const previousDayDoc = await getDoc(docRef);
+        const previousDayStateJSON = localStorage.getItem(`${LOCAL_STORAGE_KEY}_${lastSummaryDateString}`);
+        const previousDayState = previousDayStateJSON ? JSON.parse(previousDayStateJSON) : getInitialGameState();
+        
+        const userXpAtStartOfDay = previousDayState.user?.xp ?? 0;
 
-        if (previousDayDoc.exists()) {
-            const previousDayState = previousDayDoc.data() as GameState;
-            const userXpAtStartOfDay = previousDayState.user?.xp ?? 0;
-
-            const rivalsAtSummaryStart = previousDayState.rivals ?? getInitialGameState().rivals;
-            const rivalsXpGainedData = state.rivals.map(rival => {
-                const startRival = rivalsAtSummaryStart.find((r: Rival) => r.id === rival.id);
-                return {
-                    rivalId: rival.name,
-                    rivalBehavior: rival.behavior as RivalBehavior,
-                    xpGained: rival.xp - (startRival?.xp ?? 0)
-                };
-            });
-            
-            const rivalsWithReasons = await Promise.all(
-                rivalsXpGainedData
-                    .filter(r => r.xpGained > 0)
-                    .map(async r => {
-                        const reasonResult = await getRivalXPReasoning(
-                            r.rivalId,
-                            r.rivalBehavior,
-                            r.xpGained,
-                        );
-                        return {
-                            rivalId: r.rivalId,
-                            xpGained: r.xpGained,
-                            reason: reasonResult.reason,
-                        };
-                    })
-            );
-            
-            const userXpGained = state.user.xp - userXpAtStartOfDay;
-            const totalRivalXP = rivalsXpGainedData.reduce((acc, r) => acc + r.xpGained, 0);
-            const outcome = userXpGained > totalRivalXP ? 'win' : userXpGained < totalRivalXP ? 'loss' : 'tie';
-            
-            const lastPlayedDate = new Date(lastPlayedDateString);
-            const isLastPlayedValid = !isNaN(lastPlayedDate.getTime());
-            const diffDays = isLastPlayedValid ? Math.round((today.getTime() - lastPlayedDate.getTime()) / (1000 * 60 * 60 * 24)) : 2;
-
-            const summary: DailySummary = {
-              date: lastSummaryDateString,
-              userXpGained: userXpGained,
-              rivalsXpGained: rivalsWithReasons,
-              outcome: outcome,
-              streak: diffDays > 1 ? 0 : state.streak,
+        const rivalsAtSummaryStart = previousDayState.rivals ?? getInitialGameState().rivals;
+        const rivalsXpGainedData = state.rivals.map(rival => {
+            const startRival = rivalsAtSummaryStart.find((r: Rival) => r.id === rival.id);
+            return {
+                rivalId: rival.name,
+                rivalBehavior: rival.behavior as RivalBehavior,
+                xpGained: rival.xp - (startRival?.xp ?? 0)
             };
+        });
+        
+        const rivalsWithReasons = await Promise.all(
+            rivalsXpGainedData
+                .filter(r => r.xpGained > 0)
+                .map(async r => {
+                    const reasonResult = await getRivalXPReasoning(
+                        r.rivalId,
+                        r.rivalBehavior,
+                        r.xpGained,
+                    );
+                    return {
+                        rivalId: r.rivalId,
+                        xpGained: r.xpGained,
+                        reason: reasonResult.reason,
+                    };
+                })
+        );
+        
+        const userXpGained = state.user.xp - userXpAtStartOfDay;
+        const totalRivalXP = rivalsXpGainedData.reduce((acc, r) => acc + r.xpGained, 0);
+        const outcome = userXpGained > totalRivalXP ? 'win' : userXpGained < totalRivalXP ? 'loss' : 'tie';
+        
+        const lastPlayedDate = new Date(lastPlayedDateString);
+        const isLastPlayedValid = !isNaN(lastPlayedDate.getTime());
+        const diffDays = isLastPlayedValid ? Math.round((today.getTime() - lastPlayedDate.getTime()) / (1000 * 60 * 60 * 24)) : 2;
 
-            const newStreak = diffDays > 1 ? 0 : state.streak;
+        const summary: DailySummary = {
+          date: lastSummaryDateString,
+          userXpGained: userXpGained,
+          rivalsXpGained: rivalsWithReasons,
+          outcome: outcome,
+          streak: diffDays > 1 ? 0 : state.streak,
+        };
 
-            state = {
-                ...getInitialGameState(),
-                achievements: state.achievements, // Persist achievements
-                streak: newStreak, 
-                lastSummaryDate: todayDateString,
-                lastPlayed: todayDateString,
-                user: { ...state.user, xp: state.user.xp }, // Persist user XP for a day
-            };
-            
-            setGameState(state);
-            router.replace(`/summary?data=${encodeURIComponent(JSON.stringify(summary))}`);
-            return; 
-        }
+        const newStreak = diffDays > 1 ? 0 : state.streak;
+
+        state = {
+            ...getInitialGameState(),
+            achievements: state.achievements, // Persist achievements
+            streak: newStreak, 
+            lastSummaryDate: todayDateString,
+            lastPlayed: todayDateString,
+            user: { ...state.user, xp: state.user.xp }, // Persist user XP for a day
+        };
+        
+        setGameState(state);
+        router.replace(`/summary?data=${encodeURIComponent(JSON.stringify(summary))}`);
+        return; 
       }
 
       // --- Offline Rival Progression ---
@@ -246,12 +213,17 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   }, [gameState, loading, isClient, router]);
 
 
-  // Save state to Firestore whenever it changes
+  // Save state to localStorage whenever it changes
   useEffect(() => {
-    if (!loading && gameState) {
-      saveGameState(gameState);
+    if (!loading && gameState && isClient) {
+      const stateToSave = { ...gameState };
+      // Functions can't be stored in JSON, so we remove the `check` function before saving.
+      stateToSave.achievements = gameState.achievements.map(({ check, ...ach }) => ach);
+
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(stateToSave));
+      localStorage.setItem(`${LOCAL_STORAGE_KEY}_${gameState.lastSummaryDate}`, JSON.stringify(stateToSave));
     }
-  }, [gameState, loading, saveGameState]);
+  }, [gameState, loading, isClient]);
 
   const clearSummary = () => {
     if (isClient) {
