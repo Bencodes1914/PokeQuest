@@ -11,7 +11,7 @@ const rivalImages = {
   giovanni: PlaceHolderImages.find(img => img.id === 'giovanni')!,
 };
 
-const initialRivals: Rival[] = [
+export const initialRivals: Rival[] = [
   {
     id: 'jessie',
     name: "Jessie",

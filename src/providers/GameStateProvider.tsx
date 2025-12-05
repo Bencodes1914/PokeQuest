@@ -3,7 +3,7 @@
 
 import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { getInitialGameState, initialAchievements, initialTasks } from '@/lib/data';
+import { getInitialGameState, initialAchievements, initialTasks, initialRivals } from '@/lib/data';
 import { getLevelFromXP, calculateOfflineRivalXP, checkAchievements } from '@/lib/game-logic';
 import type { GameState, Rival, DailySummary } from '@/lib/types';
 import { useIsClient } from '@/hooks/use-is-client';
@@ -37,6 +37,13 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
             return { ...initialAch, unlocked: savedAch ? savedAch.unlocked : initialAch.unlocked };
         });
         parsedState.achievements = rehydratedAchievements;
+
+        // Force update rival data from initial source to ensure images are correct
+        const updatedRivals = initialRivals.map(initialRival => {
+          const savedRival = parsedState.rivals.find((r: Rival) => r.id === initialRival.id);
+          return savedRival ? { ...initialRival, xp: savedRival.xp, level: savedRival.level } : initialRival;
+        });
+        parsedState.rivals = updatedRivals;
         
         if (!parsedState.tasks || parsedState.tasks.length === 0) {
           parsedState.tasks = initialTasks;
@@ -190,6 +197,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!loading && gameState && isClient) {
       const stateToSave = { ...gameState };
+      // Omit functions from achievements before saving
       stateToSave.achievements = gameState.achievements.map(({ check, ...ach }) => ach);
 
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(stateToSave));
