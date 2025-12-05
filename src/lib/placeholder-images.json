@@ -3,25 +3,25 @@
     {
       "id": "jessie",
       "description": "A portrait of Jessie from Team Rocket.",
-      "imageUrl": "https://images.unsplash.com/photo-1572544311821-e2f6c2ef757b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHx3b21hbiUyMHZpbGxhaW58ZW58MHx8fHwxNzY0ODUxNTI4fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageUrl": "https://assets.pokemon.com/assets/cms2/img/video-games/v2/whosthatpokemon/character-guide/character-guide-jessie-169.png",
       "imageHint": "woman villain"
     },
     {
       "id": "james",
       "description": "A portrait of James from Team Rocket.",
-      "imageUrl": "https://images.unsplash.com/photo-1693020388342-ba0987dc7f4b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxtYW4lMjB2aWxsYWlufGVufDB8fHx8MTc2NDg1MTUyN3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageUrl": "https://assets.pokemon.com/assets/cms2/img/video-games/v2/whosthatpokemon/character-guide/character-guide-james-169.png",
       "imageHint": "man villain"
     },
     {
       "id": "meowth",
       "description": "A portrait of Meowth from Team Rocket.",
-      "imageUrl": "https://images.unsplash.com/photo-1613328790885-5f6f1663fdbc?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxjYXQlMjBtb25zdGVyfGVufDB8fHx8MTc2NDg1MTUyN3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageUrl": "https://assets.pokemon.com/assets/cms2/img/pokedex/full/052.png",
       "imageHint": "cat monster"
     },
     {
       "id": "giovanni",
       "description": "A portrait of Giovanni, the leader of Team Rocket.",
-      "imageUrl": "https://images.unsplash.com/photo-1764264828478-edacad3ad5ff?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8bWFmaWElMjBib3NzfGVufDB8fHx8MTc2NDg1MTUyN3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageUrl": "https://assets.pokemon.com/assets/cms2/img/video-games/v2/whosthatpokemon/character-guide/character-guide-giovanni-169.png",
       "imageHint": "mafia boss"
     }
   ]
