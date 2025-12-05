@@ -19,7 +19,6 @@ export function RivalCard({ rival }: RivalCardProps) {
         alt={rival.name}
         width={80}
         height={80}
-        data-ai-hint={rival.imageHint}
         className="rounded-full border-4 border-foreground mb-2 object-cover"
       />
       <h3 className="text-xl font-bold font-headline">{rival.name}</h3>
